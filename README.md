@@ -3,7 +3,11 @@
 This folder contains:
 
 - `README.md`: the theory of Retrieval-Augmented Generation (this file)
-- `rag_chatbot.ipynb`: a working notebook for Google Colab (T4) or your own machine: local Qwen 3.5 (Ollama) + local embeddings + Chroma + Pydantic structured answers + chat memory + document upload
+- [`rag_chatbot.ipynb`](rag_chatbot.ipynb): a working notebook for Google Colab (T4) or your own machine: local Qwen 3.5 (Ollama) + local embeddings + Chroma + Pydantic structured answers + chat memory + document upload
+
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/adiel2012/rag/blob/main/rag_chatbot.ipynb)
+
+Click the button to open the notebook in Google Colab, then choose Runtime -> Change runtime type -> **T4 GPU** and run the cells top to bottom.
 
 ---
 
@@ -145,7 +149,7 @@ Qwen 3.5 has a "thinking" mode that reasons before answering. The notebook turns
 
 ### Setup on Google Colab (T4)
 
-1. Upload `rag_chatbot.ipynb` to [Colab](https://colab.research.google.com) (File -> Upload notebook).
+1. Open the notebook in Colab: [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/adiel2012/rag/blob/main/rag_chatbot.ipynb)
 2. Runtime -> Change runtime type -> **T4 GPU**.
 3. Run the cells top to bottom. Cell 3 installs Ollama, starts it and downloads the model (about 7 GB, a few minutes).
 4. Add documents with the upload widget (cell 5), then run the following cells to index them. If `data/` is empty, a small built-in sample is used.
