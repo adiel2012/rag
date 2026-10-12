@@ -63,7 +63,7 @@ An **embedding model** turns text into a vector (a list of a few hundred numbers
 The same embedding model must be used for indexing and querying, and changing the model means re-embedding everything (the notebook keeps one Chroma collection per embedding model for this reason).
 
 Two properties of the embedding model matter in practice:
-- **Language**: `all-MiniLM-L6-v2` is trained on English. For Spanish or mixed-language documents use a multilingual model (e.g. `BAAI/bge-m3`).
+- **Language**: small models such as `all-MiniLM-L6-v2` are trained on English. The notebook uses `BAAI/bge-m3`, a larger multilingual model that also handles Spanish and mixed-language documents.
 - **Maximum input length**: text beyond the model's limit is silently cut off, so chunks must fit (MiniLM reads about 256 tokens, roughly 1000 characters of English).
 
 ### 2.4 Vector store
@@ -71,6 +71,10 @@ A database (Chroma, FAISS, Qdrant, Pinecone, pgvector) that stores each chunk's 
 
 ### 2.5 Retrieve
 Embed the question, fetch the **top-k** closest chunks (k = 3-6 is common). Raising k improves recall but adds noise and cost.
+
+**Hybrid search.** Embeddings match meaning but can miss exact terms that carry little meaning on their own: field names, codes, product-specific words ("Shipper tab", "PO-1234"). Keyword search (BM25) is the opposite: it matches exact words and ignores meaning. The notebook runs both and merges the two rankings (reciprocal rank fusion), which is more robust than either alone.
+
+**Neighbor expansion.** PDFs are loaded one page at a time, so a numbered procedure that runs over a page break ends up in separate chunks, and the best-matching chunk may hold only the first half of the answer. For the top hits the notebook also adds the chunk that follows, and passes the chunks to the model in document order.
 
 ### 2.6 Generate
 Build a prompt:
@@ -96,6 +100,8 @@ Plain RAG treats each question alone. In a chat, users say things like *"and how
 
 1. **Memory**: keep the previous turns and pass them to the model.
 2. **Question rewriting (history-aware retrieval)**: the vector search cannot understand "it". Before retrieving, the model rewrites the question into a standalone one ("How does Qwen connect to Pydantic?") using the chat history. Retrieval then uses the rewritten question, while the answer prompt gets the history.
+
+   This step has its own failure mode: a small model may *answer* the question from its general knowledge instead of rewriting it, and the search then runs on an invented answer. The notebook guards against this in three ways: the history is given as quoted text rather than as chat turns, a rewrite that looks like an answer (much longer, or no longer a question) is discarded, and the search always includes the user's original words too.
 
 The notebook implements both. It also trims history to the last few turns so the prompt does not grow forever.
 
@@ -134,7 +140,8 @@ The model runs inside the notebook's own runtime through Ollama, with no API key
 | Component | Choice | Role |
 |---|---|---|
 | LLM | Qwen 3.5 9B via **Ollama** | Generates the answer |
-| Embeddings | `all-MiniLM-L6-v2` (HuggingFace) | Text -> vectors |
+| Embeddings | `BAAI/bge-m3` (HuggingFace, multilingual) | Text -> vectors |
+| Keyword search | BM25 (`rank_bm25`) | Finds exact words; merged with the vector results |
 | Vector DB | **Chroma** (persisted in `chroma_db/`) | Stores and searches chunks |
 | Orchestration | **LangChain** | Glues the steps together |
 | Validation | **Pydantic** | Typed, validated answers |
@@ -181,6 +188,7 @@ Smaller models are faster but follow the "answer only from context" rule less re
 | 7 | Embed and sync the persistent Chroma index |
 | 8-9 | Prompts, Qwen chain, and the conversational bot (rewrite -> retrieve -> generate -> check) |
 | 10-11 | Example questions (edit them to match your PDFs) and an interactive chat loop |
+| 12 | `inspect()`: show the chunks retrieved for a question, to diagnose wrong answers |
 
 ---
 
@@ -188,6 +196,7 @@ Smaller models are faster but follow the "answer only from context" rule less re
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
+| Not sure why an answer failed | You cannot see what was retrieved | Run `inspect("your question")` (notebook section 12) to see the chunks the model was given |
 | Answers ignore the documents | Retrieval missed the right chunk | Raise `k`, adjust chunk size/overlap, check parsing |
 | "I don't know" but the answer is in the file | Chunk split the answer apart, or poor PDF text extraction (scanned PDFs need OCR) | More overlap, inspect `splits` |
 | Invented details | Model not constrained | Stronger system prompt, lower temperature, bigger model |
@@ -202,7 +211,6 @@ Smaller models are faster but follow the "answer only from context" rule less re
 Documents are also a way in for **prompt injection**: text inside a file ("ignore previous instructions...") may be followed by the model. The prompt tells the model to treat context as reference material only, which helps but is not a guarantee, so only index documents you trust.
 
 ### Beyond the basics
-- **Hybrid search** (vector + keyword/BM25) for exact terms like IDs and names
 - **Re-ranking** the top 20 results with a cross-encoder, then keeping the best 4
 - **Metadata filters** (by file, date, author)
 - **Evaluation**: build a set of questions with known answers and measure retrieval hit-rate and answer correctness before changing parameters
