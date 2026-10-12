@@ -115,6 +115,7 @@ Free-text answers are hard for programs to use. With **Pydantic** you define a s
 class RAGResponse(BaseModel):
     answer: str
     citations: list[str]
+    source_ids: list[int]     # numbers of the context chunks used
     confidence_score: float   # 0.0-1.0
     follow_up_questions: list[str]
 ```
@@ -158,8 +159,8 @@ Qwen 3.5 has a "thinking" mode that reasons before answering. The notebook turns
 
 1. Open the notebook in Colab: [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/adiel2012/rag/blob/main/rag_chatbot.ipynb)
 2. Runtime -> Change runtime type -> **T4 GPU**.
-3. Run the cells top to bottom. Cell 3 installs Ollama, starts it and downloads the model (about 7 GB, a few minutes).
-4. Cell 5 asks for your PDF files: an upload button appears and the notebook waits until you choose them. The following cells index them.
+3. Run the cells top to bottom. Section 3 installs Ollama, starts it and downloads the model (about 7 GB, a few minutes).
+4. Section 5 asks for your PDF files: an upload button appears and the notebook waits until you choose them. The following cells index them. (DOCX, CSV, TXT and MD files put in `data/` through Colab's Files panel are indexed too.)
 
 Colab sessions are temporary: after a runtime reset the model, your uploaded files and the index are gone and the cells must be run again. Note also that on Colab your documents are uploaded to Google's servers, so "local" means "no AI API", not "never leaves your computer".
 
@@ -167,8 +168,8 @@ Colab sessions are temporary: after a runtime reset the model, your uploaded fil
 
 1. Install [Python](https://www.python.org/downloads/) 3.10 or newer (tick "Add python.exe to PATH" on Windows) and the Jupyter extension for VS Code.
 2. Install [Ollama](https://ollama.com) (version 0.17.4 or newer for Qwen 3.5).
-3. Open `rag_chatbot.ipynb` and run the cells top to bottom. Cell 3 starts Ollama if needed and pulls the model.
-4. Cell 5 opens a file dialog asking for your PDF files and copies them into `data/`. (DOCX, CSV, TXT and MD files placed in `data/` by hand are indexed too.)
+3. Open `rag_chatbot.ipynb` and run the cells top to bottom. Section 3 starts Ollama if needed and pulls the model.
+4. Section 5 opens a file dialog asking for your PDF files and copies them into `data/`. (DOCX, CSV, TXT and MD files placed in `data/` by hand are indexed too.)
 
 On a machine with 8 GB of RAM use `qwen3.5:4b` instead; without a GPU the 9B will be slow.
 
@@ -180,7 +181,7 @@ Smaller models are faster but follow the "answer only from context" rule less re
 
 ### What the notebook does
 
-| Cells | Step |
+| Sections | Step |
 |---|---|
 | 1-3 | Install, configure, install/start Ollama and download the model |
 | 4 | Pydantic schemas: `RAGResponse` (from the model) and `GroundedResponse` (plus code-checked fields) |
@@ -201,7 +202,7 @@ Smaller models are faster but follow the "answer only from context" rule less re
 | "I don't know" but the answer is in the file | Chunk split the answer apart, or poor PDF text extraction (scanned PDFs need OCR) | More overlap, inspect `splits` |
 | Invented details | Model not constrained | Stronger system prompt, lower temperature, bigger model |
 | Follow-up questions retrieve junk | No question rewriting | Use the rewrite step (included) |
-| Citations marked "NOT found in context" | Model paraphrased or invented the quote | Check the listed source yourself; try a larger model |
+| Citations marked "NOT found in context" | Model paraphrased or invented the quote, or the quote is under 15 characters or spans two chunks | Check the listed source yourself; try a larger model |
 | Poor results on non-English documents | English-only embedding model | Switch `EMBED_MODEL` to a multilingual one |
 | Instructions ignored on long chats or many chunks | Prompt exceeds the context window | Raise `NUM_CTX`, lower `TOP_K` or chunk size |
 | "Summarize everything" gives a partial answer | Only top-k chunks are seen (section 2.7) | Ask specific questions, or summarize per document |

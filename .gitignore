@@ -1,0 +1,7 @@
+# Created by running the notebook locally: your documents, the index and logs
+data/
+chroma_db/
+ollama.log
+
+.ipynb_checkpoints/
+__pycache__/
