@@ -9,6 +9,37 @@ This folder contains:
 
 Click the button to open the notebook in Google Colab, then choose Runtime -> Change runtime type -> **T4 GPU** and run the cells top to bottom.
 
+## Quick start (no experience needed)
+
+You need a Google account and one or two PDF files. Nothing is installed on your computer and nothing costs money.
+
+1. Click the **Open in Colab** button above. The notebook opens in your browser.
+2. In the menu choose **Runtime -> Change runtime type -> T4 GPU -> Save**. Do this first: changing it later restarts everything.
+3. Click the first grey box (a "code cell") and press **Shift+Enter** to run it. Wait until it finishes, then do the same with the next one, in order, down the page. The first time Colab asks whether to run a notebook that is not from Google, choose "Run anyway".
+4. Section 3 downloads the AI model (about 7 GB). It takes several minutes; let it finish.
+5. In section 5 a **Choose Files** button appears. Pick your PDFs.
+6. Keep running the cells. In section 10, replace the example questions with your own; in section 11 you can chat freely.
+
+Some output looks like an error and is not: see [Messages that look alarming but are normal](#messages-that-look-alarming-but-are-normal). The rest of this file explains how it all works; you do not need to read it to use the notebook.
+
+## Words you will meet
+
+| Word | Meaning |
+|---|---|
+| **LLM** (large language model) | The AI model that reads text and writes the answer. Here: Qwen. |
+| **Prompt** | The text given to the model: instructions, passages from your documents, and your question. |
+| **Token** | The unit models count text in. One token is roughly three quarters of an English word. |
+| **Context window** | The maximum number of tokens the model can read at once. Whatever does not fit is cut off. |
+| **Hallucination** | An answer that sounds right but that the model made up. |
+| **Chunk** | A piece of a document, a few paragraphs long. Documents are cut into chunks so that the relevant passage can be found. |
+| **Embedding** | A list of numbers that represents the meaning of a text. Texts with similar meaning have similar numbers. |
+| **Vector store** | A database of embeddings that can find the chunks closest in meaning to a question. Here: Chroma. |
+| **Retrieval** | Finding the chunks relevant to a question. The "R" in RAG. |
+| **Top-k** | How many chunks are retrieved and given to the model (k = 6 in the notebook). |
+| **Ollama** | The program that runs the model on the machine, instead of calling a paid online service. |
+| **GPU** | A graphics processor. Models run many times faster on it than on a normal processor (CPU). "T4" is the GPU Colab offers for free. |
+| **Schema** | A fixed list of fields an answer must have, like a form. Defined here with Pydantic. |
+
 ---
 
 ## 1. What is RAG?
@@ -164,6 +195,17 @@ Qwen 3.5 has a "thinking" mode that reasons before answering. The notebook turns
 
 Colab sessions are temporary: after a runtime reset the model, your uploaded files and the index are gone and the cells must be run again. Note also that on Colab your documents are uploaded to Google's servers, so "local" means "no AI API", not "never leaves your computer".
 
+### Messages that look alarming but are normal
+
+| You see | Where | What it means |
+|---|---|---|
+| Red lines starting with `ERROR: pip's dependency resolver...` that mention `google-colab` or `google-adk` | Section 1 | Two packages that come with Colab wanted older versions of some libraries. The notebook does not depend on that. The install worked: continue. |
+| `WARNING: systemd is not running` | Section 3 | Colab cannot run Ollama as a background service, so the notebook starts it itself. Ignore it. |
+| A cell that seems stuck for minutes | Section 3 | The 7 GB model is downloading. Percentages are printed as it goes. |
+| A cell that waits and does nothing | Section 5 | It is waiting for you to click **Choose Files**. |
+| `RuntimeError: This Colab runtime has no GPU` | Section 3 | A real error, with a simple fix: Runtime -> Change runtime type -> T4 GPU, then run again from the first cell. If T4 GPU was already selected, your free Colab GPU time is used up for now: try again in a few hours. |
+| The first answer is slow | Section 10 | The model is being loaded onto the GPU. Later answers are faster. |
+
 ### Setup on your own machine
 
 1. Install [Python](https://www.python.org/downloads/) 3.10 or newer (tick "Add python.exe to PATH" on Windows) and the Jupyter extension for VS Code.
@@ -190,6 +232,8 @@ Smaller models are faster but follow the "answer only from context" rule less re
 | 8-9 | Prompts, Qwen chain, and the conversational bot (rewrite -> retrieve -> generate -> check) |
 | 10-11 | Example questions (edit them to match your PDFs) and an interactive chat loop |
 | 12 | `inspect()`: show the chunks retrieved for a question, to diagnose wrong answers |
+
+Each section of the notebook says what its cell does, how long it takes and what you should see when it finishes.
 
 ---
 
