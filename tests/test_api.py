@@ -46,6 +46,18 @@ def test_chat_keeps_a_conversation_per_session(client, llm):
     assert forgotten["standalone_question"] == "How long is it?"
 
 
+def test_responses_are_logged(client, caplog):
+    with caplog.at_level("INFO", logger="rag"):
+        client.post("/api/chat", json={"question": "How long is the warranty?"})
+        client.post("/api/chat", json={"question": ""})
+        client.get("/api/health")
+    lines = [r.getMessage() for r in caplog.records]
+    assert any(l.startswith("Question (session ") and l.endswith("How long is the warranty?") for l in lines)
+    assert any(l.startswith("POST /api/chat -> 200 in ") and '"answer":"It is in the manual."' in l for l in lines)
+    assert any(l.startswith("POST /api/chat -> 422 in ") for l in lines)      # errors are logged too
+    assert not any("/api/health" in l for l in lines)                         # too noisy to log
+
+
 def test_chat_rejects_bad_input(client):
     assert client.post("/api/chat", json={"question": ""}).status_code == 422
     assert client.post("/api/chat", json={"question": "hi", "session_id": "../etc"}).status_code == 422

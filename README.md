@@ -328,6 +328,19 @@ There are two ways to run it. They differ only in where the models run:
 
 **What to expect.** The first start downloads the Ollama image and the models, then reads the documents and builds the index. The page shows each stage (`pulling model`, `indexing`) and enables the question box at `ready`. As a reference, on a 16-core machine without a GPU, two PDF manuals (337 pages, 516 chunks) took about 4 minutes to index, and each answer took 70 to 90 seconds with `qwen3.5:4b`. Later starts skip the downloads and re-embed nothing if the documents are unchanged. A GPU makes answers much faster.
 
+**What the status line means.** While the app starts, the page shows what it is doing next to the title:
+
+| Status | What is happening |
+|---|---|
+| `starting` | The app is waiting for the Ollama container to answer. |
+| `pulling model: qwen3.5:4b: 40%` | The Ollama container on your machine is downloading the model that **writes the answers** (3.3 GB) from the public registry at ollama.com. Nothing is uploaded and no account is used. |
+| `pulling model: bge-m3: 40%` | The same, for the second model (1.2 GB). It is the **embedding model**: it turns text into numbers that represent its meaning, which is how the passages relevant to a question are found. The percentage starts again from 0 for this model. |
+| `indexing: embedding chunks 200/516` | `bge-m3` is reading your documents, chunk by chunk, to build the search index. |
+| `qwen3.5:4b (ollama) · 2 file(s), 516 chunks` | Ready. The question box is enabled. |
+| `error: ...` | Startup failed; see [If something goes wrong](#if-something-goes-wrong). |
+
+The percentages come from Ollama, which reports its progress while it downloads; the app passes them on in steps of 10%, and the page asks the app for the status every two seconds. The same lines appear in the app's log. The models are stored in a Docker volume, so they are downloaded only once: they are fetched again only after `down -v` or after deleting Docker's volumes.
+
 **Always start it with `docker compose`.** Starting the image by itself (for example with the Run button in Docker Desktop) gives a container with no Ollama next to it and no published port, so the page cannot be opened.
 
 **Another model.** Copy `.env.example` to `.env` and set `LLM_MODEL` to any model from the [Ollama library](https://ollama.com/library), for example `LLM_MODEL=llama3.2`. It is downloaded on the next start. For a model without a "thinking" mode also set `THINKING=` (empty).
@@ -427,6 +440,7 @@ The fields are described in section 4. Send the `session_id` with the next quest
 
 - **No login.** The compose files publish the page on this machine only (`127.0.0.1`). Do not expose it to a network as it is.
 - **Conversations are kept in memory** and are lost when the app restarts.
+- **The server logs every question and every API response** (status, time taken and the response body, cut to 4,000 characters), except the health check. Read them with the logs command above. The logs therefore contain text from your documents; set `LOG_RESPONSE_CHARS=0` in `.env` to turn response logging off.
 - **Settings** (`TOP_K`, `CHUNK_SIZE`, `NUM_CTX`, `PORT`, `DOCS_DIR`...) are explained in `.env.example`.
 - **Differences from the notebook:** embeddings come from the model provider instead of running inside the app (so the image needs no PyTorch), and the app keeps one conversation per browser session instead of a single one.
 - **Tested:** the local mode has been run end to end on CPU. The GPU file and the AWS mode have not yet been run against a real GPU or a real AWS account.

@@ -1,14 +1,15 @@
 """FastAPI app: a chat page and a JSON API over the RAG pipeline of the notebook."""
 import logging
 import threading
+import time
 import uuid
 from collections import OrderedDict
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import List, Optional
 
-from fastapi import FastAPI, HTTPException, Query
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from . import providers
@@ -101,6 +102,24 @@ def create_app(settings: Optional[Settings] = None, llm=None, embeddings=None) -
     app = FastAPI(title="RAG chatbot", lifespan=lifespan)
     app.state.rag = state
 
+    @app.middleware("http")
+    async def log_response(request: Request, call_next):
+        """Log what the API answers. /api/health is left out: it is polled every few seconds."""
+        started = time.perf_counter()
+        response = await call_next(request)
+        path, limit = request.url.path, state.settings.log_response_chars
+        if not path.startswith("/api/") or path == "/api/health" or limit <= 0:
+            return response
+        body = b"".join([part async for part in response.body_iterator])
+        text = body.decode("utf-8", "replace")
+        if len(text) > limit:
+            text = f"{text[:limit]}... ({len(text)} characters in all)"
+        query = f"?{request.url.query}" if request.url.query else ""
+        log.info("%s %s%s -> %d in %.1fs: %s", request.method, path, query,
+                 response.status_code, time.perf_counter() - started, text or "(empty)")
+        return Response(content=body, status_code=response.status_code,
+                        headers=dict(response.headers), media_type=response.media_type)
+
     def engine() -> Engine:
         if state.stage != "ready":
             raise HTTPException(503, f"Not ready ({state.stage}): {state.detail}".rstrip(": "))
@@ -124,6 +143,7 @@ def create_app(settings: Optional[Settings] = None, llm=None, embeddings=None) -
     def chat(req: ChatRequest):
         engine()
         session_id, bot, lock = state.session(req.session_id)
+        log.info("Question (session %s): %s", session_id, req.question.strip())
         with lock:      # one question at a time per conversation, so the history stays in order
             try:
                 answer = bot.ask(req.question.strip())

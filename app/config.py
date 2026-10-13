@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     ollama_base_url: str = "http://localhost:11434"
     aws_region: str = "us-east-1"
     max_sessions: int = 200             # conversations kept in memory
+    log_response_chars: int = 4000      # API responses are logged, cut to this length; 0: not logged
 
     @field_validator("thinking", "temperature", mode="before")
     @classmethod

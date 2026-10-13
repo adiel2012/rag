@@ -28,6 +28,7 @@ services:
       CHUNK_SIZE: ${CHUNK_SIZE:-1000}
       CHUNK_OVERLAP: ${CHUNK_OVERLAP:-150}
       TOP_K: ${TOP_K:-6}
+      LOG_RESPONSE_CHARS: ${LOG_RESPONSE_CHARS:-4000}
     volumes:
       - chroma_aws:/chroma                      # the search index
       # To use a profile from your AWS config instead of keys in .env, set AWS_PROFILE
