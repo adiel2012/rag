@@ -1,0 +1,9 @@
+.git
+.env
+chroma_db
+tests
+*.ipynb
+*.md
+ollama.log
+**/__pycache__
+.pytest_cache

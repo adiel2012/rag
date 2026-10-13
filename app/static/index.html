@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RAG chatbot</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #ffffff; --text: #1c2330; --muted: #667085; --line: #dfe3ea;
+    --accent: #2f6fed; --accent-text: #ffffff; --user: #e8f0fe; --ok: #1a7f4b; --bad: #b42318;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #12151b; --panel: #1b2029; --text: #e6e9ef; --muted: #98a2b3; --line: #2c3340;
+      --accent: #5b8def; --accent-text: #0d1117; --user: #24304a; --ok: #4cc38a; --bad: #ff8a80;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  .page { max-width: 820px; margin: 0 auto; padding: 16px; display: flex; flex-direction: column; min-height: 100vh; }
+  header { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+  h1 { font-size: 1.25rem; margin: 0; }
+  #status { color: var(--muted); font-size: .875rem; flex: 1; }
+  #status.error { color: var(--bad); }
+  button { font: inherit; cursor: pointer; border-radius: 8px; border: 1px solid var(--line);
+           background: var(--panel); color: var(--text); padding: 6px 12px; }
+  button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+  button:disabled { opacity: .5; cursor: default; }
+  #docs { color: var(--muted); font-size: .875rem; margin: 8px 0 0; }
+  #docs .warn { color: var(--bad); }
+  #log { flex: 1; margin: 16px 0; display: flex; flex-direction: column; gap: 12px; }
+  .msg { padding: 12px 14px; border-radius: 12px; overflow-wrap: anywhere; }
+  .msg.user { background: var(--user); align-self: flex-end; max-width: 85%; }
+  .msg.bot { background: var(--panel); border: 1px solid var(--line); }
+  .msg.error { border-color: var(--bad); color: var(--bad); }
+  .answer { white-space: pre-wrap; }
+  .meta { color: var(--muted); font-size: .875rem; margin-top: 8px; }
+  .quote { font-size: .875rem; margin: 6px 0 0; padding-left: 10px; border-left: 3px solid var(--line); }
+  .quote .tag { font-weight: 600; }
+  .quote.ok .tag { color: var(--ok); }
+  .quote.bad .tag { color: var(--bad); }
+  .followups { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  .followups button { font-size: .875rem; text-align: left; }
+  form { display: flex; gap: 8px; position: sticky; bottom: 0; background: var(--bg); padding: 8px 0 16px; }
+  textarea { flex: 1; font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--line);
+             border-radius: 8px; padding: 10px; resize: vertical; min-height: 46px; }
+</style>
+</head>
+<body>
+<div class="page">
+  <header>
+    <h1>Ask your documents</h1>
+    <span id="status">Connecting...</span>
+    <button id="new" type="button">New conversation</button>
+  </header>
+  <p id="docs"></p>
+
+  <div id="log" aria-live="polite"></div>
+
+  <form id="form">
+    <textarea id="q" rows="1" placeholder="Type a question about your documents" disabled></textarea>
+    <button class="primary" id="send" disabled>Send</button>
+  </form>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const log = $("log"), q = $("q"), send = $("send"), statusEl = $("status");
+let sessionId = null, ready = false, busy = false;
+
+function el(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text !== undefined) e.textContent = text;   // textContent: model output is never run as HTML
+  return e;
+}
+
+function setEnabled() {
+  q.disabled = !ready;
+  send.disabled = !ready || busy;
+}
+
+async function poll() {
+  try {
+    const h = await (await fetch("/api/health")).json();
+    ready = h.stage === "ready";
+    statusEl.className = h.stage === "error" ? "error" : "";
+    statusEl.textContent = ready
+      ? `${h.llm_model} (${h.provider}) · ${h.files} file(s), ${h.chunks} chunks`
+      : `${h.stage}${h.detail ? ": " + h.detail : ""}`;
+    if (ready) showDocs();
+    if (!ready && h.stage !== "error") setTimeout(poll, 2000);
+  } catch {
+    statusEl.textContent = "Server not reachable, retrying...";
+    setTimeout(poll, 3000);
+  }
+  setEnabled();
+}
+
+async function showDocs() {
+  const docs = await (await fetch("/api/documents")).json();
+  const p = $("docs");
+  p.textContent = "Documents: ";
+  docs.forEach((d, i) => {
+    p.append(el("span", d.low_text ? "warn" : "",
+      d.name + (d.pages === 0 ? " (no text could be read: scanned? not searchable)" : d.low_text ? " (very little text: scanned?)" : "") + (i < docs.length - 1 ? ", " : "")));
+  });
+}
+
+function showAnswer(r) {
+  const box = el("div", "msg bot");
+  box.append(el("div", "answer", r.answer));
+  if (r.standalone_question && r.standalone_question !== r.question) {
+    box.append(el("div", "meta", "Searched as: " + r.standalone_question));
+  }
+  box.append(el("div", "meta",
+    `Sources: ${r.sources.length ? r.sources.join(", ") : "none"} · Confidence (model-reported): ${r.confidence_score.toFixed(2)}`));
+  r.citations.forEach((c, i) => {
+    const ok = r.citations_verified[i];
+    const quote = el("div", "quote " + (ok ? "ok" : "bad"));
+    quote.append(el("span", "tag", ok ? "Found in the documents: " : "NOT found in the documents: "), el("span", "", c));
+    box.append(quote);
+  });
+  if (r.follow_up_questions.length) {
+    const f = el("div", "followups");
+    r.follow_up_questions.forEach(text => {
+      const b = el("button", "", text);
+      b.type = "button";
+      b.onclick = () => ask(text);
+      f.append(b);
+    });
+    box.append(f);
+  }
+  log.append(box);
+}
+
+async function ask(text) {
+  text = text.trim();
+  if (!text || busy || !ready) return;
+  busy = true; setEnabled();
+  log.append(el("div", "msg user", text));
+  const waiting = el("div", "msg bot meta", "Thinking...");
+  log.append(waiting);
+  waiting.scrollIntoView({ block: "end" });
+  try {
+    const res = await fetch("/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question: text, session_id: sessionId }),
+    });
+    const data = await res.json();
+    waiting.remove();
+    if (!res.ok) throw new Error(typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail));
+    sessionId = data.session_id;
+    showAnswer({ ...data, question: text });
+  } catch (e) {
+    waiting.remove();
+    log.append(el("div", "msg bot error", "Error: " + e.message));
+  }
+  busy = false; setEnabled();
+  log.lastChild.scrollIntoView({ block: "end" });
+  q.focus();
+}
+
+$("form").addEventListener("submit", e => {
+  e.preventDefault();
+  const text = q.value;
+  q.value = "";
+  ask(text);
+});
+q.addEventListener("keydown", e => {
+  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); $("form").requestSubmit(); }
+});
+$("new").addEventListener("click", () => {
+  if (sessionId) fetch("/api/sessions/" + sessionId, { method: "DELETE" });
+  sessionId = null;
+  log.replaceChildren();
+  q.focus();
+});
+
+poll();
+</script>
+</body>
+</html>

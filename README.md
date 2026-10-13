@@ -1,15 +1,35 @@
-# RAG explained, plus a local conversational RAG chatbot
+# Chat with your documents: RAG explained, with a notebook and a Docker app
 
-This folder contains:
+Ask questions in plain language and get answers taken from your own PDFs, with the file and page each answer came from. This technique is called **Retrieval-Augmented Generation (RAG)**. The repository explains how it works and gives you two working versions of the same pipeline.
 
-- `README.md`: the theory of Retrieval-Augmented Generation (this file)
-- [`rag_chatbot.ipynb`](rag_chatbot.ipynb): a working notebook for Google Colab (T4) or your own machine: local Qwen 3.5 (Ollama) + local embeddings + Chroma + Pydantic structured answers + chat memory + document upload
+| | Notebook | Web app |
+|---|---|---|
+| What it is | [`rag_chatbot.ipynb`](rag_chatbot.ipynb), run cell by cell | A chat page and a JSON API, in Docker ([`app/`](app)) |
+| Best for | Learning how RAG works, step by step | Using it day to day, or calling it from other programs |
+| You need | A Google account (it runs on Google Colab) | [Docker Desktop](https://www.docker.com/products/docker-desktop/) |
+| Models | Qwen 3.5, running inside the notebook | Qwen or any other Ollama model on your machine, or models from AWS (Amazon Bedrock) |
+| Documents | You upload PDFs when asked | A folder on your machine |
+| Start here | [Quick start: the notebook](#quick-start-the-notebook) | [Quick start: the web app](#quick-start-the-web-app) |
 
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/adiel2012/rag/blob/main/rag_chatbot.ipynb)
 
-Click the button to open the notebook in Google Colab, then choose Runtime -> Change runtime type -> **T4 GPU** and run the cells top to bottom.
+## Contents
 
-## Quick start (no experience needed)
+- [Quick start: the notebook](#quick-start-the-notebook)
+- [Quick start: the web app](#quick-start-the-web-app)
+- [Words you will meet](#words-you-will-meet)
+- How it works
+  - [1. What is RAG?](#1-what-is-rag)
+  - [2. The pipeline](#2-the-pipeline)
+  - [3. Making it conversational](#3-making-it-conversational)
+  - [4. Structured output with Pydantic](#4-structured-output-with-pydantic)
+- Using it
+  - [5. Running the notebook](#5-running-it-qwen--ollama-on-colab-or-your-own-machine)
+  - [6. Common problems and tuning](#6-common-problems-and-tuning)
+  - [7. Web app and API (Docker)](#7-web-app-and-api-docker)
+- [What is in this repository](#what-is-in-this-repository)
+
+## Quick start: the notebook
 
 You need a Google account and one or two PDF files. Nothing is installed on your computer and nothing costs money.
 
@@ -20,7 +40,22 @@ You need a Google account and one or two PDF files. Nothing is installed on your
 5. In section 5 a **Choose Files** button appears. Pick your PDFs.
 6. Keep running the cells. In section 10, replace the example questions with your own; in section 11 you can chat freely.
 
-Some output looks like an error and is not: see [Messages that look alarming but are normal](#messages-that-look-alarming-but-are-normal). The rest of this file explains how it all works; you do not need to read it to use the notebook.
+Some output looks like an error and is not: see [Messages that look alarming but are normal](#messages-that-look-alarming-but-are-normal).
+
+## Quick start: the web app
+
+You need [Docker Desktop](https://www.docker.com/products/docker-desktop/) installed and running, and about 16 GB of free disk.
+
+1. Download this repository and put your documents (PDF, DOCX, CSV, TXT, MD) in its `data/` folder.
+2. Open a terminal in the repository folder and run:
+
+   ```bash
+   docker compose -f docker-compose.local.yml up --build
+   ```
+
+3. Open <http://localhost:8000>. The first start downloads the models, which takes several minutes; the page shows the progress and enables the question box when it is ready.
+
+Everything else (a GPU, other models, AWS, a different documents folder, the API) is in [section 7](#7-web-app-and-api-docker).
 
 ## Words you will meet
 
@@ -167,7 +202,7 @@ and `llm.with_structured_output(RAGResponse)` makes the model return JSON matchi
 
 ## 5. Running it (Qwen + Ollama, on Colab or your own machine)
 
-The model runs inside the notebook's own runtime through Ollama, with no API keys and no calls to an external AI service:
+This section is about the notebook; the Docker app is in [section 7](#7-web-app-and-api-docker). The model runs inside the notebook's own runtime through Ollama, with no API keys and no calls to an external AI service:
 
 | Component | Choice | Role |
 |---|---|---|
@@ -188,10 +223,7 @@ Qwen 3.5 has a "thinking" mode that reasons before answering. The notebook turns
 
 ### Setup on Google Colab (T4)
 
-1. Open the notebook in Colab: [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/adiel2012/rag/blob/main/rag_chatbot.ipynb)
-2. Runtime -> Change runtime type -> **T4 GPU**.
-3. Run the cells top to bottom. Section 3 installs Ollama, starts it and downloads the model (about 7 GB, a few minutes).
-4. Section 5 asks for your PDF files: an upload button appears and the notebook waits until you choose them. The following cells index them. (DOCX, CSV, TXT and MD files put in `data/` through Colab's Files panel are indexed too.)
+Follow [Quick start: the notebook](#quick-start-the-notebook). Two details it leaves out: section 3 installs and starts Ollama for you, and DOCX, CSV, TXT and MD files put in `data/` through Colab's Files panel are indexed along with the PDFs.
 
 Colab sessions are temporary: after a runtime reset the model, your uploaded files and the index are gone and the cells must be run again. Note also that on Colab your documents are uploaded to Google's servers, so "local" means "no AI API", not "never leaves your computer".
 
@@ -259,3 +291,161 @@ Documents are also a way in for **prompt injection**: text inside a file ("ignor
 - **Re-ranking** the top 20 results with a cross-encoder, then keeping the best 4
 - **Metadata filters** (by file, date, author)
 - **Evaluation**: build a set of questions with known answers and measure retrieval hit-rate and answer correctness before changing parameters
+
+---
+
+## 7. Web app and API (Docker)
+
+The `app/` folder is the notebook's pipeline as a service: a chat page in the browser and a JSON API. It needs only [Docker Desktop](https://www.docker.com/products/docker-desktop/). The documents come from a folder that is copied into the Docker image when it is built; there is no upload.
+
+There are two ways to run it. They differ only in where the models run:
+
+| | Local | AWS |
+|---|---|---|
+| Compose file | `docker-compose.local.yml` | `docker-compose.aws.yml` |
+| Answering model | Ollama container, default `qwen3.5:4b` | Amazon Bedrock, the model you choose |
+| Embeddings | Ollama, `bge-m3` | Bedrock, `amazon.titan-embed-text-v2:0` |
+| Your documents and questions | Stay on your machine | Are sent to AWS |
+| Cost | Free | Pay per use |
+| Needs | About 16 GB of disk (Ollama image 9.4 GB, models 4.5 GB, app 1 GB); a GPU helps a lot | An AWS account with Bedrock access |
+
+### Run it locally
+
+1. Put your documents (PDF, DOCX, CSV, TXT, MD) in the `data/` folder, or point `DOCS_DIR` at the folder that has them (see [The documents folder](#the-documents-folder)).
+2. Start it:
+
+   ```bash
+   docker compose -f docker-compose.local.yml up --build
+   ```
+
+   With an NVIDIA GPU (uses the larger `qwen3.5:9b`):
+
+   ```bash
+   docker compose -f docker-compose.local.yml -f docker-compose.gpu.yml up --build
+   ```
+
+3. Open <http://localhost:8000>.
+
+**What to expect.** The first start downloads the Ollama image and the models, then reads the documents and builds the index. The page shows each stage (`pulling model`, `indexing`) and enables the question box at `ready`. As a reference, on a 16-core machine without a GPU, two PDF manuals (337 pages, 516 chunks) took about 4 minutes to index, and each answer took 70 to 90 seconds with `qwen3.5:4b`. Later starts skip the downloads and re-embed nothing if the documents are unchanged. A GPU makes answers much faster.
+
+**Always start it with `docker compose`.** Starting the image by itself (for example with the Run button in Docker Desktop) gives a container with no Ollama next to it and no published port, so the page cannot be opened.
+
+**Another model.** Copy `.env.example` to `.env` and set `LLM_MODEL` to any model from the [Ollama library](https://ollama.com/library), for example `LLM_MODEL=llama3.2`. It is downloaded on the next start. For a model without a "thinking" mode also set `THINKING=` (empty).
+
+### Run it with AWS models
+
+1. In the AWS console, check that your account can use the model you want in Amazon Bedrock, and that your user or role may call `bedrock:InvokeModel`.
+2. Copy `.env.example` to `.env` and fill in the AWS part: `AWS_REGION`, `BEDROCK_LLM_MODEL` (for example `us.anthropic.claude-haiku-5-5`; more examples are in `.env.example`) and your credentials.
+3. Put your documents in `data/` (or set `DOCS_DIR`) and start it:
+
+   ```bash
+   docker compose -f docker-compose.aws.yml up --build
+   ```
+
+4. Open <http://localhost:8000>.
+
+`.env` holds your credentials: it is listed in `.gitignore` and is not copied into the image. Indexing sends the text of your documents to Bedrock once, to compute the embeddings; each question then sends the question and the retrieved passages.
+
+### The documents folder
+
+The documents are copied into the Docker image when it is built, so the image always carries its own documents. The folder is set in one of two ways:
+
+- **In the `Dockerfile`:** by default it is `data/` (the line `COPY data/ /` at the top).
+- **As a parameter:** set `DOCS_DIR` to any folder on your machine, in `.env` or on the command line:
+
+  ```bash
+  DOCS_DIR=/path/to/my/pdfs docker compose -f docker-compose.local.yml up --build
+  ```
+
+  In PowerShell, run `$env:DOCS_DIR = "C:\Users\me\pdfs"` first and then the `docker compose` command.
+
+After adding, changing or removing files, build and start again with the same command (`up --build`). Only new or changed chunks are embedded again. Each mode keeps its own index, so switching between local and AWS does not mix them.
+
+The page lists the files it read under the title. A file marked "no text could be read" is usually a scanned PDF: it holds pictures of pages, not text, and cannot be searched until it has been through OCR.
+
+Because the documents are inside the image, do not push the image to a public registry if they are private.
+
+### Everyday commands
+
+Run them in the repository folder. For AWS mode, replace `docker-compose.local.yml` with `docker-compose.aws.yml`.
+
+| To | Command |
+|---|---|
+| Start in the background | `docker compose -f docker-compose.local.yml up -d --build` |
+| See what the app is doing | `docker compose -f docker-compose.local.yml logs -f app` |
+| Stop (keeps the models and the index) | `docker compose -f docker-compose.local.yml down` |
+| Stop and delete the downloaded models and the index | `docker compose -f docker-compose.local.yml down -v` |
+
+### The API
+
+The page uses the same API you can call from your own programs. Interactive documentation is at <http://localhost:8000/docs>.
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/api/health` | Startup stage (`starting`, `pulling model`, `indexing`, `ready`, `error`), models, number of files and chunks |
+| GET | `/api/documents` | The files that were read; `pages: 0` means no text could be read from the file |
+| POST | `/api/chat` | Ask a question. Body: `{"question": "...", "session_id": "..."}` |
+| DELETE | `/api/sessions/{id}` | Forget a conversation |
+| GET | `/api/inspect?q=...` | The chunks retrieved for a question, to see why an answer was wrong |
+
+```bash
+curl -s -X POST http://localhost:8000/api/chat -H "Content-Type: application/json" -d '{"question": "How many paid holiday days do employees get?"}'
+```
+
+```json
+{
+  "answer": "Employees get 23 days of paid holiday per year.",
+  "citations": [],
+  "source_ids": [2],
+  "confidence_score": 1.0,
+  "follow_up_questions": [],
+  "standalone_question": "How many paid holiday days do employees get?",
+  "sources": ["handbook.md"],
+  "citations_verified": [],
+  "session_id": "febe58d2c8b94b9c90618339c9e3aca6"
+}
+```
+
+The fields are described in section 4. Send the `session_id` with the next question to continue the same conversation; leave it out to start a new one. While the app is still starting, `/api/chat` answers with status 503.
+
+### If something goes wrong
+
+| You see | Cause | Fix |
+|---|---|---|
+| The page does not open | The app was not started with `docker compose`, or it is still building | Start it with the compose command; check the logs (see Everyday commands) |
+| The page stays on `pulling model` | The models are downloading (about 4.5 GB the first time) | Wait; the percentage is shown |
+| `error: No Ollama server answered` | The app container is running without the Ollama container | Start both with the compose command |
+| `error: No text could be extracted from the files` | The documents folder is empty, or holds only scanned PDFs | Put documents with real text in `data/` (or set `DOCS_DIR`) and run `up --build` again |
+| `error: Unable to locate credentials` | AWS mode without credentials | Fill in the AWS keys (or `AWS_PROFILE`) in `.env` |
+| An access or validation error from Bedrock | The model is not enabled for your account or Region, or the ID is wrong | Check the model ID and Region in `.env` against the Bedrock console |
+| `port is already allocated` | Another program uses port 8000 | Set `PORT=8080` in `.env` and open <http://localhost:8080> |
+| Answers take a minute or more | The model is running on the CPU | Use the GPU file, a smaller model (`LLM_MODEL=qwen3.5:2b`), or AWS mode |
+| A wrong answer, or "I don't know" | The right passage was not retrieved, or the file has no text | Open `/api/inspect?q=your question` to see what the model was given; see section 6 |
+| Answers come without quotes | Small models often leave the optional `citations` field empty | Use a larger model |
+
+### Good to know
+
+- **No login.** The compose files publish the page on this machine only (`127.0.0.1`). Do not expose it to a network as it is.
+- **Conversations are kept in memory** and are lost when the app restarts.
+- **Settings** (`TOP_K`, `CHUNK_SIZE`, `NUM_CTX`, `PORT`, `DOCS_DIR`...) are explained in `.env.example`.
+- **Differences from the notebook:** embeddings come from the model provider instead of running inside the app (so the image needs no PyTorch), and the app keeps one conversation per browser session instead of a single one.
+- **Tested:** the local mode has been run end to end on CPU. The GPU file and the AWS mode have not yet been run against a real GPU or a real AWS account.
+- **Tests:** `pip install -r requirements-dev.txt` and then `pytest`. They use fake models, so they need neither Ollama nor AWS.
+
+---
+
+## What is in this repository
+
+| Path | What it is |
+|---|---|
+| `README.md` | This file |
+| `rag_chatbot.ipynb` | The notebook |
+| `app/` | The web app: `config.py` (settings), `providers.py` (Ollama and Bedrock), `ingest.py` (load and chunk), `index.py` (Chroma, BM25, retrieval), `bot.py` (prompts and the conversational bot), `main.py` (the API), `static/index.html` (the chat page) |
+| `Dockerfile` | Builds the app image, with the documents inside |
+| `docker-compose.local.yml` | Runs the app with Ollama on this machine |
+| `docker-compose.gpu.yml` | Addition to the local file for an NVIDIA GPU |
+| `docker-compose.aws.yml` | Runs the app with Amazon Bedrock |
+| `.env.example` | Every setting, with explanations. Copy it to `.env` to change them |
+| `data/` | Default documents folder (its contents are not committed) |
+| `tests/` | Tests for the app |
+| `requirements.txt`, `requirements-dev.txt` | Python dependencies of the app and of the tests |

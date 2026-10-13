@@ -1,0 +1,41 @@
+# The models are served by Amazon Bedrock; only the app runs on this machine.
+#
+#   docker compose -f docker-compose.aws.yml up --build
+#
+# Before the first run, copy .env.example to .env and fill in the AWS part:
+# the region, BEDROCK_LLM_MODEL and your credentials. Your documents: the ./data folder, or any folder given as DOCS_DIR.
+# Then open http://localhost:8000
+#
+# Your documents' text and your questions are sent to AWS.
+
+name: rag-aws
+
+services:
+  app:
+    build:
+      context: .
+      additional_contexts:
+        docs: ${DOCS_DIR:-./data}       # the documents folder, copied into the image by the Dockerfile
+    env_file:
+      - path: .env          # AWS credentials are read from here, and only if they are set
+        required: false
+    environment:
+      PROVIDER: bedrock
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      LLM_MODEL: ${BEDROCK_LLM_MODEL:?Set BEDROCK_LLM_MODEL in .env to a Bedrock model ID or inference profile ID}
+      EMBED_MODEL: ${BEDROCK_EMBED_MODEL:-amazon.titan-embed-text-v2:0}
+      TEMPERATURE: ${BEDROCK_TEMPERATURE:-}     # empty: the model's default
+      CHUNK_SIZE: ${CHUNK_SIZE:-1000}
+      CHUNK_OVERLAP: ${CHUNK_OVERLAP:-150}
+      TOP_K: ${TOP_K:-6}
+    volumes:
+      - chroma_aws:/chroma                      # the search index
+      # To use a profile from your AWS config instead of keys in .env, set AWS_PROFILE
+      # in .env and uncomment the next line:
+      # - ${USERPROFILE:-${HOME}}/.aws:/home/app/.aws:ro
+    ports:
+      - "127.0.0.1:${PORT:-8000}:8000"          # this machine only; there is no login
+    restart: unless-stopped
+
+volumes:
+  chroma_aws:

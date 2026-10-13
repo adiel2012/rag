@@ -1,0 +1,52 @@
+# Everything runs on this machine: the models are served by Ollama.
+#
+#   docker compose -f docker-compose.local.yml up --build
+#
+# With an NVIDIA GPU, add the override file:
+#
+#   docker compose -f docker-compose.local.yml -f docker-compose.gpu.yml up --build
+#
+# Your documents: the ./data folder, or any folder given as DOCS_DIR (see README). Then open http://localhost:8000
+# To use another model, set LLM_MODEL in .env (any model from https://ollama.com/library).
+
+name: rag-local
+
+services:
+  ollama:
+    image: ollama/ollama
+    volumes:
+      - ollama_models:/root/.ollama      # downloaded models survive restarts
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  app:
+    build:
+      context: .
+      additional_contexts:
+        docs: ${DOCS_DIR:-./data}       # the documents folder, copied into the image by the Dockerfile
+    depends_on:
+      ollama:
+        condition: service_healthy
+    environment:
+      PROVIDER: ollama
+      OLLAMA_BASE_URL: http://ollama:11434
+      LLM_MODEL: ${LLM_MODEL:-qwen3.5:4b}       # a size that is usable without a GPU
+      EMBED_MODEL: ${EMBED_MODEL:-bge-m3}
+      THINKING: ${THINKING:-false}
+      NUM_CTX: ${NUM_CTX:-8192}
+      CHUNK_SIZE: ${CHUNK_SIZE:-1000}
+      CHUNK_OVERLAP: ${CHUNK_OVERLAP:-150}
+      TOP_K: ${TOP_K:-6}
+    volumes:
+      - chroma_local:/chroma                    # the search index
+    ports:
+      - "127.0.0.1:${PORT:-8000}:8000"          # this machine only; there is no login
+    restart: unless-stopped
+
+volumes:
+  ollama_models:
+  chroma_local:

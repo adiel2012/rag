@@ -1,0 +1,18 @@
+# Override for docker-compose.local.yml: gives Ollama the NVIDIA GPU and uses the larger model.
+# Needs the NVIDIA Container Toolkit (on Windows: Docker Desktop with WSL 2 and an NVIDIA driver).
+#
+#   docker compose -f docker-compose.local.yml -f docker-compose.gpu.yml up --build
+
+services:
+  ollama:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  app:
+    environment:
+      LLM_MODEL: ${LLM_MODEL:-qwen3.5:9b}

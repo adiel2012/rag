@@ -1,7 +1,38 @@
-# Created by running the notebook locally: your documents, the index and logs
-data/
+# Your documents, the index and logs
+data/*
+!data/.gitkeep
 chroma_db/
 ollama.log
+*.log
 
-.ipynb_checkpoints/
+# Settings and AWS credentials
+.env
+.env.*
+!.env.example
+.aws/
+
+# Docker: personal overrides
+docker-compose.override.yml
+
+# Python
 __pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.coverage
+htmlcov/
+*.egg-info/
+build/
+dist/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Editors and operating system
+.vscode/
+.idea/
+.claude/
+.DS_Store
+Thumbs.db
+desktop.ini
